@@ -334,7 +334,10 @@ def handle_query(
     if not bedrock_kb_id or bedrock_kb_id == "ABCD1234" or total_chars <= 35000:
         logger.info(f"Using S3 fulltext RAG (total chars: {total_chars})")
         if context.strip():
-            prompt = _build_rag_prompt(context, question, history_context)
+            # Thêm danh sách file đang chọn vào prompt để AI nắm được cấu trúc
+            docs_list_str = "\n".join([f"- {d.get('filename')} ({d.get('chars', 0)} chars)" for d in docs])
+            enhanced_context = f"Selected Documents List:\n{docs_list_str}\n\n{context}"
+            prompt = _build_rag_prompt(enhanced_context, question, history_context)
             answer = ai_client.invoke(prompt, max_tokens=2048)
             citations = s3_citations
         else:
@@ -343,24 +346,22 @@ def handle_query(
         # Bedrock KB path (for large document collections)
         try:
             logger.info(f"Using Bedrock KB Vector Search (total chars: {total_chars})")
-            filter_kwargs = {"user_id": user_id}
-            if doc_id:
-                filter_kwargs["doc_id"] = doc_id
             
-            # Since Bedrock KB standard equals filter does not support IN queries natively,
-            # we query top 30 results and filter them locally to match the list of selected doc_ids
-            # Nâng query_top_k lên 30 để đảm bảo lấy được chunks từ nhiều tài liệu khác nhau
-            query_top_k = 30 if (doc_ids or not doc_id) else 10
-            chunks = vector_store.search(question, top_k=query_top_k, filter=filter_kwargs)
+            # Cải tiến: Phân bổ đều chunks cho từng tài liệu để tránh một tài liệu đè tài liệu khác
+            chunks = []
+            target_doc_ids = doc_ids if doc_ids else [d.get("doc_id") for d in docs if d.get("doc_id")]
             
-            # Local filtering for doc_ids list
-            if doc_ids:
-                chunks = [c for c in chunks if c.get("metadata", {}).get("doc_id") in doc_ids or c.get("doc_id") in doc_ids]
-                # Slice back to top 10
-                chunks = chunks[:10]
+            if target_doc_ids:
+                # Mỗi tài liệu lấy tối đa (18 / số tài liệu) chunks, tối thiểu là 4 chunks/file
+                chunks_per_doc = max(18 // len(target_doc_ids), 4)
+                for d_id in target_doc_ids:
+                    filter_kwargs = {"user_id": user_id, "doc_id": d_id}
+                    doc_chunks = vector_store.search(question, top_k=chunks_per_doc, filter=filter_kwargs)
+                    chunks.extend(doc_chunks)
             else:
-                chunks = chunks[:10]
-                
+                filter_kwargs = {"user_id": user_id}
+                chunks = vector_store.search(question, top_k=15, filter=filter_kwargs)
+            
             kb_context = "\n\n".join([f"[Chunk {i+1}] {c['text']}" for i, c in enumerate(chunks)]) if chunks else ""
             if chunks:
                 for c in chunks:
@@ -376,7 +377,10 @@ def handle_query(
             
             final_context = kb_context if kb_context.strip() else context
             if final_context.strip():
-                prompt = _build_rag_prompt(final_context, question, history_context)
+                # Bổ sung danh sách tài liệu được chọn vào prompt
+                docs_list_str = "\n".join([f"- {d.get('filename')} ({d.get('chars', 0)} chars)" for d in docs])
+                enhanced_context = f"Selected Documents List:\n{docs_list_str}\n\n{final_context}"
+                prompt = _build_rag_prompt(enhanced_context, question, history_context)
                 answer = ai_client.invoke(prompt, max_tokens=2048)
             else:
                 answer = "No content found in your documents."
