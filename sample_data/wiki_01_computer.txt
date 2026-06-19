@@ -1,0 +1,60 @@
+# Computer
+
+_Source: HuggingFace wikimedia/wikipedia (Simple English, 2023-11-01)_
+_URL: https://simple.wikipedia.org/wiki/Computer_
+
+A computer is a machine that uses electronics to input, process, store, and output data. Data is information such as numbers, words, and lists. Input of data means to read information from a keyboard, a storage device like a hard drive, or a sensor. The computer processes or changes the data by following the instructions in software programs. A computer program is a list of instructions the computer has to perform. Programs usually perform mathematical calculations, modify data, or move it around. The data is then saved on a storage device, shown on a display, or sent to another computer. Computers can be connected together to form a network such as the internet, allowing the computers to communicate with each other.
+
+The processor of a computer is made from integrated circuits (chips) that contains many transistors. Most computers are digital, which means that they represent information using binary digits, or bits. Computers come in different shapes and sizes, depending on the brand, model, and purpose. They range from small computers, such as smartphones and laptops, to large computers, such as supercomputers.
+
+Characteristics 
+The two things make it a computer are that it responds to a specific instruction set in a well-defined manner, and that it can execute a stored list of instructions called a program. There are four main actions in a computer: inputting, storing, outputting and processing.
+
+Modern computers can do billions of calculations in a second. Being able to calculate many times per second allows modern computers to multi-task, which means they can do many different tasks at the same time. Computers do many different jobs where automation is useful. Some examples are controlling traffic lights, vehicles, security systems, washing machines and digital televisions.
+
+Computers can be designed to do almost anything with information. Computers are used to control large and small machines that, in the past, were controlled by humans. Most people have a personal computer at home or at work. They are used for things such as calculation, listening to music, reading an article, writing, or playing games.
+
+Hardware 
+Modern computers are electronic computer hardware. They do mathematical arithmetic very quickly, but computers do not really "think." They only follow the instructions in their software programs. The software uses the hardware when the user gives it instructions and produces useful outputs.
+
+Controls 
+Computers are controlled with user interfaces. Input devices which include keyboards, computer mice, buttons, and touch screens, etc.
+
+Programs 
+Computer programs are designed or written by computer programmers. A few programmers write programs in the computer's own language, called machine code. Most programs are written using a programming language like C, C++, JavaScript. These programming languages are more like the language with which one talks and writes every day. The compiler converts the user's instructions into binary code (machine code) that the computer will understand and do what is needed.
+
+History of computers
+
+First computer 
+In 1837, Charles Babbage proposed the first general mechanical computer, the Analytical Engine. The Analytical Engine contained an Arithmetic Logic Unit, basic flow control, punched cards, and integrated memory. It is the first general-purpose computer concept that could be used for many things and not only one particular computation. However, this computer was never built while Charles Babbage was alive, because he didn't have enough money. In 1910, Henry Babbage, Charles Babbage's youngest son, was able to complete a portion of this machine and perform basic calculations.
+Before the computer era there were machines that could do the same thing over and over again, like a music box. But some people wanted to be able to tell their machine to do different things. For example, they wanted to tell the music box to play different music every time. This part of computer history is called the "history of programmable machines" which in simple words means "the history of machines that I can order to do different things if I know how to speak their language."
+
+One of the first examples of this was built by Hero of Alexandria (c. 10–70 AD). He built a mechanical theater which performed a play lasting 10 minutes and was operated by a complex system of ropes and drums. These ropes and drums were the language of the machine- they told what the machine did and when. Some people argue that this is the first programmable machine.
+
+Some people disagree on which early computer is programmable. Many say the "castle clock", an astronomical clock invented by Al-Jazari in 1206, is the first known programmable analog computer. The length of day and night could be adjusted every day in order to account for the changing lengths of day and night throughout the year. Some count this daily adjustment as computer programming.
+
+Others say the first computer was made by Charles Babbage. Ada Lovelace is considered to be the first programmer.
+
+The computing era 
+At the end of the Middle Ages, people started thinking math and engineering were more important. In 1623, Wilhelm Schickard made a mechanical calculator. Other Europeans made more calculators after him. They were not modern computers because they could only add, subtract, and multiply- you could not change what they did to make them do something like play Tetris. Because of this, we say they were not programmable. Now engineers use computers to design and plan.
+
+In 1801, Joseph Marie Jacquard used punched paper cards to tell his textile loom what kind of pattern to weave. He could use punch cards to tell the loom what to do, and he could change the punch cards, which means he could program the loom to weave the pattern he wanted. This means the loom was programmable. At the end of the 1800s Herman Hollerith invented the recording of data on a medium that could then be read by a machine, developing punched card data processing technology for the 1890 U.S. census. His tabulating machines read and summarized data stored on punched cards and they began use for government and commercial data processing.
+
+Charles Babbage wanted to make a similar machine that could calculate. He called it "The Analytical Engine". Because Babbage did not have enough money and always changed his design when he had a better idea, he never built his Analytical Engine.
+
+As time went on, computers were used more. People get bored easily doing the same thing over and over. Imagine spending your life writing things down on index cards, storing them, and then having to go find them again. The U.S. Census Bureau in 1890 had hundreds of people doing just that. It was expensive, and reports took a long time. Then an engineer worked out how to make machines do a lot of the work. Herman Hollerith invented a tabulating machine that would automatically add up information that the Census bureau collected. The Computing Tabulating Recording Corporation (which later became IBM) made his machines. They leased the machines instead of selling them. Makers of machines had long helped their users understand and repair them, and CTR's tech support was especially good.
+
+Because of machines like this, new ways of talking to these machines were invented, and new types of machines were invented, and eventually the computer as we know it was born.
+
+Analog and digital computers 
+In the first half of the 20th century, scientists started using computers, mostly because scientists had a lot of math to figure out and wanted to spend more of their time thinking about science questions instead of spending hours adding numbers together. For example, if they had to launch a rocket ship, they needed to do a lot of math to make sure the rocket worked right. So they put together computers. These analog computers used analog circuits, which made them very hard to program. In the 1930s, they invented digital computers, and soon made them easier to program. However this is not the case as many consecutive attempts have been made to bring arithmetic logic to l3.Analog computers are mechanical or electronic devices which solve problems.Some are used to control machines as well.
+
+High-scale computers 
+Scientists figured out how to make and use digital computers in the 1930s to 1940s. Scientists made a lot of digital computers, and as they did, they figured out how to ask them the right sorts of questions to get the most out of them. Here are a few of the computers they built:
+
+ Konrad Zuse's electromechanical "Z machines". The Z3 (1941) was the first working machine that used binary arithmetic. Binary arithmetic means using "Yes" and "No." to add numbers together. You could also program it. In 1998 the Z3 was proved to be Turing complete. Turing complete means that it is possible to tell this particular computer anything that it is mathematically possible to tell a computer. It is the world's first modern computer.
+ The non-programmable Atanasoff–Berry Computer (1941) which used vacuum tubes to store "yes" and "no" answers, and regenerative capacitor memory.
+ The Harvard Mark I (1944), A big computer that you could kind of program.
+ The U.S. Army's Ballistics Research Laboratory ENIAC (1946), which could add numbers the way people do (using the numbers 0 through 9) and is sometimes called the first general purpose electronic computer (since Konrad Zuse's Z3 of 1941 used electromagnets instead of electronics). At first, however, the only way to reprogram ENIAC was by rewiring it.
+
+Several developers of ENIAC saw its problems. They invented a way to for a computer to remember what they had told it, and a way to change what it remembered. This is known as "stored program architecture" or von Neumann architecture. John von Neumann talked about this design in the paper First Draft of a Report on the EDVAC, distributed in 1945. A number of projects to develop computers based on the stored-program architectur
