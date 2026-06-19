@@ -8,6 +8,11 @@ output "cloudfront_domain" {
   value       = aws_cloudfront_distribution.frontend.domain_name
 }
 
+output "cloudfront_distribution_id" {
+  description = "CloudFront distribution ID for the static frontend"
+  value       = aws_cloudfront_distribution.frontend.id
+}
+
 output "cloudfront_url" {
   description = "Full URL to the StudyBot frontend"
   value       = "https://${aws_cloudfront_distribution.frontend.domain_name}"

@@ -55,10 +55,12 @@ terraform apply -auto-approve
 API_URL=$(terraform output -raw api_gateway_url)
 CF_DOMAIN=$(terraform output -raw cloudfront_domain)
 FRONTEND_BUCKET=$(terraform output -raw s3_frontend_bucket)
+CF_DIST_ID=$(terraform output -raw cloudfront_distribution_id)
 
 info "API Gateway URL:    $API_URL"
 info "CloudFront Domain:  $CF_DOMAIN"
 info "Frontend Bucket:    $FRONTEND_BUCKET"
+info "CloudFront Dist ID: $CF_DIST_ID"
 
 cd "$SCRIPT_DIR"
 
@@ -72,16 +74,11 @@ sed "s|http://localhost:8000|${API_URL}|g" frontend/index.html > build/frontend/
 aws s3 sync build/frontend/ "s3://${FRONTEND_BUCKET}/" --delete
 
 # ── Step 6: Invalidate CloudFront cache ──
-CF_DIST_ID=$(aws cloudfront list-distributions \
-    --query "DistributionList.Items[?Comment=='StudyBot Frontend'].Id" \
-    --output text)
-
-if [[ -n "$CF_DIST_ID" ]]; then
-    info "Invalidating CloudFront cache ($CF_DIST_ID)..."
-    aws cloudfront create-invalidation \
-        --distribution-id "$CF_DIST_ID" \
-        --paths "/*" > /dev/null
-fi
+# Uses CF_DIST_ID captured from Terraform output (Step 4) for precision
+info "Invalidating CloudFront cache ($CF_DIST_ID)..."
+aws cloudfront create-invalidation \
+    --distribution-id "$CF_DIST_ID" \
+    --paths "/*" > /dev/null
 
 # ── Step 7: Health check ──
 info "Step 7: Health check..."
