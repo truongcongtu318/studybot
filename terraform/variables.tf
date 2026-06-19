@@ -6,7 +6,7 @@ variable "aws_region" {
 
 variable "project_name" {
   type        = string
-  default     = "studybot"
+  default     = "studybot-app"
   description = "Project name tag"
 }
 
