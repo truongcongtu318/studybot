@@ -229,18 +229,20 @@ def handle_upload(
     # Smart chunking
     chunks = smart_chunk(text, chunk_size=1000, chunk_overlap=150)
     
-    # Ingest into vector store
-    for i, chunk in enumerate(chunks):
-        vector_store.ingest(
+    # Ingest into custom S3-based vector store (generate embeddings in batch)
+    try:
+        vector_store.ingest_chunks(
+            user_id=user_id,
             doc_id=doc_id,
-            text=chunk,
+            filename=filename,
+            chunks=chunks,
             metadata={
-                "user_id": user_id,
-                "filename": filename,
-                "chunk_idx": i,
-                "doc_id": doc_id,
+                "extraction_method": method,
+                "num_pages": num_pages
             }
         )
+    except Exception as e:
+        logger.error(f"Failed embedding ingestion for {filename}: {e}")
     
     # Save extracted text as helper file in S3 for fast fallback
     extracted_text_key = f"{user_id}/{doc_id}/{filename}.extracted.txt"
@@ -328,10 +330,10 @@ def handle_query(
     total_chars = sum(d.get("chars", 0) for d in docs)
 
     # Execute the right RAG path
-    # If Bedrock KB ID is dummy/empty or if the total character size is small (<= 35000 chars),
-    # we prefer S3 full-text context. This provides 100% accuracy and covers ALL documents fully,
-    # preventing retrieval loss where only one document gets retrieved by Vector Search.
-    if not bedrock_kb_id or bedrock_kb_id == "ABCD1234" or total_chars <= 35000:
+    # If the total character size is small (<= 35000 chars),
+    # we prefer S3 full-text context. This provides 100% accuracy and covers ALL documents fully.
+    # Otherwise, for larger collections, we use our S3 Semantic Vector Search.
+    if total_chars <= 35000:
         logger.info(f"Using S3 fulltext RAG (total chars: {total_chars})")
         if context.strip():
             # Thêm danh sách file đang chọn vào prompt để AI nắm được cấu trúc
@@ -343,36 +345,31 @@ def handle_query(
         else:
             answer = "You haven't uploaded any study materials yet! Please upload a PDF, TXT or Markdown file first."
     else:
-        # Bedrock KB path (for large document collections)
+        # Custom S3-backed In-Memory Vector Search (Semantic RAG)
         try:
-            logger.info(f"Using Bedrock KB Vector Search (total chars: {total_chars})")
+            logger.info(f"Using S3 Semantic Vector Search (total chars: {total_chars})")
             
-            # Cải tiến: Phân bổ đều chunks cho từng tài liệu để tránh một tài liệu đè tài liệu khác
-            chunks = []
             target_doc_ids = doc_ids if doc_ids else [d.get("doc_id") for d in docs if d.get("doc_id")]
             
-            if target_doc_ids:
-                # Mỗi tài liệu lấy tối đa (18 / số tài liệu) chunks, tối thiểu là 4 chunks/file
-                chunks_per_doc = max(18 // len(target_doc_ids), 4)
-                for d_id in target_doc_ids:
-                    filter_kwargs = {"user_id": user_id, "doc_id": d_id}
-                    doc_chunks = vector_store.search(question, top_k=chunks_per_doc, filter=filter_kwargs)
-                    chunks.extend(doc_chunks)
-            else:
-                filter_kwargs = {"user_id": user_id}
-                chunks = vector_store.search(question, top_k=15, filter=filter_kwargs)
+            # Search top 15 most relevant chunks from the selected documents
+            chunks = vector_store.search_docs(
+                query=question,
+                user_id=user_id,
+                doc_ids=target_doc_ids,
+                top_k=15
+            )
             
             kb_context = "\n\n".join([f"[Chunk {i+1}] {c['text']}" for i, c in enumerate(chunks)]) if chunks else ""
             if chunks:
                 for c in chunks:
                     meta = c.get("metadata", {})
                     citations.append({
-                        "text": f"[{len(citations)+1}] {meta.get('filename', 'Knowledge Base chunk')}",
+                        "text": f"[{len(citations)+1}] {meta.get('filename', 'Vector chunk')}",
                         "filename": meta.get("filename"),
                         "snippet": c["text"][:200]
                     })
             else:
-                # Fallback to S3 citations if Bedrock KB returned no chunks
+                # Fallback to S3 fulltext citations if vector search returned no results
                 citations = s3_citations
             
             final_context = kb_context if kb_context.strip() else context
@@ -385,13 +382,13 @@ def handle_query(
             else:
                 answer = "No content found in your documents."
         except Exception as e:
-            logger.error(f"Bedrock KB failed: {e}. Falling back to S3...")
+            logger.error(f"S3 Semantic Search failed: {e}. Falling back to S3 fulltext...")
             if context.strip():
                 prompt = _build_rag_prompt(context, question, history_context)
                 answer = ai_client.invoke(prompt, max_tokens=2048)
                 citations = s3_citations
             else:
-                answer = f"Error: Bedrock KB unavailable and no documents in S3."
+                answer = f"Error: Vector search failed and no documents available."
     
     # Save to session history if session_id is set
     if session_id:

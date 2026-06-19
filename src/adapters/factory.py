@@ -33,6 +33,5 @@ def make_userstore():
 
 
 def make_vector():
-    if config.vector_backend == "bedrock_kb":
-        return vector.BedrockKBVector(kb_id=config.vector_bedrock_kb_id, region=config.aws_region)
-    raise ValueError(f"Unknown VECTOR_BACKEND: {config.vector_backend!r} (expected 'bedrock_kb')")
+    # Always use the custom S3VectorStore for lightweight local semantic search
+    return vector.S3VectorStore(bucket_name=config.storage_bucket, region=config.aws_region)
