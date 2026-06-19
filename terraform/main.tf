@@ -242,7 +242,7 @@ resource "aws_lambda_function" "api" {
   role          = aws_iam_role.lambda_role.arn
   handler       = "src.app.handler"
   runtime       = "python3.12"
-  timeout       = 60
+  timeout       = 180
   memory_size   = 512
 
   filename         = "${path.module}/../build/lambda.zip"

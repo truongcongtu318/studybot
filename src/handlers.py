@@ -36,6 +36,7 @@ RULES:
 3. Questions should test understanding, not just memorization.
 4. Cover different topics from the content, spread across the material.
 5. Include a brief explanation for why the correct answer is right.
+6. Generate the questions, options, and explanations in the SAME language as the provided content (e.g., if the content is in Vietnamese, generate in Vietnamese; if in English, generate in English).
 
 CONTENT:
 {content}
@@ -58,6 +59,7 @@ RULES:
 3. Cards should be concise but informative.
 4. Cover the most important topics from the content.
 5. Vary the types: definitions, comparisons, cause-effect, applications.
+6. Generate all flashcard text (front, back, topic) in the SAME language as the provided content (e.g., if the content is in Vietnamese, generate in Vietnamese; if in English, generate in English).
 
 CONTENT:
 {content}
@@ -77,6 +79,7 @@ TASKS:
 1. Write a clear, well-structured summary of the entire content (aim for about 300-500 words).
 2. Identify the 5 most testable/important concepts from this material.
 3. For each testable concept, explain WHY it's likely to be tested and provide a one-sentence key takeaway.
+4. Generate the entire response (summary, concept, why_testable, key_takeaway) in the SAME language as the provided content (e.g., if the content is in Vietnamese, generate in Vietnamese; if in English, generate in English).
 
 CONTENT:
 {content}
@@ -226,8 +229,8 @@ def handle_upload(
     density = extraction_result.get("density", 0)
     num_pages = extraction_result.get("pages", 1)
     
-    # Smart chunking
-    chunks = smart_chunk(text, chunk_size=1000, chunk_overlap=150)
+    # Smart chunking (Tăng chunk_size để giảm số lượng request gọi embedding, tránh Bedrock throttling và tăng tốc upload)
+    chunks = smart_chunk(text, chunk_size=3000, chunk_overlap=400)
     
     # Ingest into custom S3-based vector store (generate embeddings in batch)
     try:
@@ -292,8 +295,6 @@ def handle_query(
     ai_client,
     userstore,
     vector_store,
-    vector_backend: str,
-    bedrock_kb_id: str,
     storage,
     session_id: Optional[str] = None,
     doc_id: Optional[str] = None,
@@ -359,13 +360,16 @@ def handle_query(
                 top_k=15
             )
             
-            kb_context = "\n\n".join([f"[Chunk {i+1}] {c['text']}" for i, c in enumerate(chunks)]) if chunks else ""
+            kb_context = "\n\n".join([f"--- DOCUMENT: {c.get('metadata', {}).get('filename', 'Vector chunk')} ---\n{c['text']}" for c in chunks]) if chunks else ""
             if chunks:
                 for c in chunks:
                     meta = c.get("metadata", {})
+                    fn = meta.get("filename", "Vector chunk")
+                    chunk_idx = meta.get("chunk_idx")
+                    label = f"{fn} (Part {chunk_idx + 1})" if chunk_idx is not None else fn
                     citations.append({
-                        "text": f"[{len(citations)+1}] {meta.get('filename', 'Vector chunk')}",
-                        "filename": meta.get("filename"),
+                        "text": f"[{len(citations)+1}] {label}",
+                        "filename": label,
                         "snippet": c["text"][:200]
                     })
             else:
@@ -407,13 +411,15 @@ def handle_query(
 def _build_rag_prompt(context: str, question: str, history: str) -> str:
     history_part = f"Conversation History:\n{history}\n" if history else ""
     return (
-        f"You are a helpful study AI assistant. Answer the user's question based strictly on the provided document context below.\n\n"
+        f"You are a professional, helpful study AI assistant. Your goal is to answer the user's question based ONLY on the provided document context below.\n\n"
         f"Context:\n{context}\n\n"
         f"{history_part}"
         f"Instructions:\n"
-        f"1. Rely only on clear facts directly mentioned in the context. Do not assume or extrapolate.\n"
-        f"2. Format your response beautifully using clean markdown structure (bolding, lists, code blocks where appropriate).\n"
-        f"3. Cite the documents you use by appending inline tags like [1] or [2] (matching the document order listed in the context, e.g. the first document is [1]) at the end of sentences that refer to facts from those documents.\n\n"
+        f"1. Rely only on clear facts directly mentioned in the context. Do NOT assume, extrapolate, or bring in outside knowledge.\n"
+        f"2. If the answer cannot be found in the context, politely state: 'I cannot find the answer to this question in the uploaded documents.'\n"
+        f"3. Format your response beautifully using clean markdown (bolding, bullet points, headers, or code blocks where appropriate).\n"
+        f"4. Cite the documents you use by appending inline tags like [1] or [2] (where [1] corresponds to the first document file mentioned in the context, [2] corresponds to the second, etc.) at the end of the sentences that refer to facts from those documents.\n"
+        f"5. Answer in the SAME language as the user's question or the document context (e.g., if they ask in Vietnamese, reply in Vietnamese; if in English, reply in English).\n\n"
         f"User: {question}\n\n"
         f"Assistant:"
     )
@@ -427,7 +433,6 @@ def handle_quiz(
     ai_client,
     userstore,
     vector_store,
-    vector_backend: str,
     storage,
 ) -> dict:
     """Generate MCQs from Bedrock KB or S3 fallback."""
@@ -481,7 +486,6 @@ def handle_flashcards(
     ai_client,
     userstore,
     vector_store,
-    vector_backend: str,
     storage,
 ) -> dict:
     """Generate flashcards from content."""
@@ -533,8 +537,6 @@ def handle_summary(
     doc_ids: Optional[list],
     ai_client,
     userstore,
-    vector_store,
-    vector_backend: str,
     storage,
 ) -> dict:
     """Generate summary from content."""
@@ -636,6 +638,12 @@ def handle_delete_doc(user_id: str, doc_id: str, userstore, storage, vector_stor
         storage.delete(ext_key)
     except Exception as e:
         logger.warning(f"Failed to delete extracted text {ext_key}: {e}")
+
+    # Delete vector index from S3
+    try:
+        vector_store.delete_doc(user_id, doc_id)
+    except Exception as e:
+        logger.warning(f"Failed to delete vector index for doc_id {doc_id}: {e}")
 
     # Delete metadata from DynamoDB
     userstore.delete_doc(user_id, doc_id)

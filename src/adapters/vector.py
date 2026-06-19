@@ -37,58 +37,84 @@ class S3VectorStore:
         self.bedrock = boto3.client("bedrock-runtime", region_name=region)
 
     def _get_embedding(self, text: str) -> List[float]:
-        """Call Amazon Bedrock Titan Text Embeddings V2."""
-        try:
-            body = json.dumps({
-                "inputText": text,
-                "dimensions": 1024,
-                "normalize": True
-            })
-            resp = self.bedrock.invoke_model(
-                body=body,
-                modelId="amazon.titan-embed-text-v2:0",
-                accept="application/json",
-                contentType="application/json"
-            )
-            resp_body = json.loads(resp["body"].read())
-            return resp_body.get("embedding", [])
-        except Exception as e:
-            logger.error(f"Error calling Bedrock Titan Embedding: {e}")
-            # Return zero vector on failure
-            return [0.0] * 1024
+        """Call Amazon Bedrock Titan Text Embeddings V2 with exponential backoff retry."""
+        import time
+        max_retries = 3
+        base_delay = 0.25  # seconds
+
+        body = json.dumps({
+            "inputText": text,
+            "dimensions": 1024,
+            "normalize": True
+        })
+
+        for attempt in range(max_retries):
+            try:
+                resp = self.bedrock.invoke_model(
+                    body=body,
+                    modelId="amazon.titan-embed-text-v2:0",
+                    accept="application/json",
+                    contentType="application/json"
+                )
+                resp_body = json.loads(resp["body"].read())
+                return resp_body.get("embedding", [])
+            except Exception as e:
+                err_msg = str(e)
+                # Check for throttling exception or rate limits
+                if "Throttling" in err_msg or "RateLimit" in err_msg or "429" in err_msg or "TooManyRequests" in err_msg:
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning(f"Embedding throttled. Retrying in {delay:.2f}s (Attempt {attempt + 1}/{max_retries})...")
+                    time.sleep(delay)
+                else:
+                    logger.error(f"Error calling Bedrock Titan Embedding: {e}")
+                    break
+
+        # Return zero vector on failure
+        return [0.0] * 1024
 
     def ingest_chunks(self, user_id: str, doc_id: str, filename: str, chunks: List[str], metadata: Optional[Dict[str, Any]] = None) -> None:
-        """Generate embeddings for all chunks and save them as a single JSON file on S3."""
+        """Generate embeddings for all chunks in parallel and save them as a single JSON file on S3."""
         if not chunks:
             return
 
-        logger.info(f"Ingesting vector index for {filename} ({len(chunks)} chunks)...")
-        vector_data = []
+        logger.info(f"Ingesting vector index for {filename} ({len(chunks)} chunks) in parallel...")
 
+        valid_chunks = []
         for i, chunk in enumerate(chunks):
-            # Strip whitespace
             chunk_text = chunk.strip()
-            if not chunk_text:
-                continue
-            
-            # Generate embedding
+            if chunk_text:
+                valid_chunks.append((i, chunk_text))
+
+        if not valid_chunks:
+            return
+
+        from concurrent.futures import ThreadPoolExecutor
+        import time
+
+        def process_chunk(item):
+            idx, chunk_text = item
             vector = self._get_embedding(chunk_text)
-            
-            # Form metadata
+
             chunk_metadata = {
                 "user_id": user_id,
                 "doc_id": doc_id,
                 "filename": filename,
-                "chunk_idx": i
+                "chunk_idx": idx
             }
             if metadata:
                 chunk_metadata.update(metadata)
 
-            vector_data.append({
+            time.sleep(0.01)  # small gap
+
+            return {
                 "text": chunk_text,
                 "vector": vector,
                 "metadata": chunk_metadata
-            })
+            }
+
+        # Request embeddings in parallel (light concurrency to avoid Bedrock throttling)
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            vector_data = list(executor.map(process_chunk, valid_chunks))
 
         # Save to S3: {user_id}/{doc_id}/{filename}.vectors.json
         key = f"{user_id}/{doc_id}/{filename}.vectors.json"
@@ -103,9 +129,44 @@ class S3VectorStore:
         except Exception as e:
             logger.error(f"Failed to save vectors to S3 for {filename}: {e}")
 
-    def ingest(self, doc_id: str, text: str, metadata: Optional[dict] = None) -> None:
-        """Legacy interface method. Ingestion is handled via ingest_chunks in batch mode."""
-        pass
+    def delete_doc(self, user_id: str, doc_id: str) -> None:
+        """Delete all vector files for this doc_id on S3."""
+        prefix = f"{user_id}/{doc_id}/"
+        try:
+            list_resp = self.s3.list_objects_v2(
+                Bucket=self.bucket_name,
+                Prefix=prefix
+            )
+            for obj in list_resp.get("Contents", []):
+                if obj["Key"].endswith(".vectors.json"):
+                    self.s3.delete_object(Bucket=self.bucket_name, Key=obj["Key"])
+                    logger.info(f"Deleted vector file from S3: {obj['Key']}")
+        except Exception as e:
+            logger.error(f"Failed to delete vector files for doc_id {doc_id} on S3: {e}")
+
+    def search(self, query: str, top_k: int = 5, filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Search vectors matching a query and filters (used by quiz/flashcard generators)."""
+        if not filter or "user_id" not in filter:
+            return []
+
+        user_id = filter["user_id"]
+        doc_id = filter.get("doc_id")
+
+        if doc_id:
+            doc_ids = [doc_id]
+        else:
+            try:
+                list_resp = self.s3.list_objects_v2(
+                    Bucket=self.bucket_name,
+                    Prefix=f"{user_id}/"
+                )
+                keys = [obj["Key"] for obj in list_resp.get("Contents", []) if obj["Key"].endswith(".vectors.json")]
+                doc_ids = list(set(key.split("/")[1] for key in keys if len(key.split("/")) >= 2))
+            except Exception as e:
+                logger.error(f"Error listing user doc prefixes on S3: {e}")
+                return []
+
+        return self.search_docs(query=query, user_id=user_id, doc_ids=doc_ids, top_k=top_k)
 
     def search_docs(self, query: str, user_id: str, doc_ids: List[str], top_k: int = 5) -> List[Dict[str, Any]]:
         """Search across specific documents for this user using Cosine Similarity."""

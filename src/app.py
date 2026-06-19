@@ -183,8 +183,6 @@ def query(req: QueryRequest, x_user_id: Optional[str] = Header(None)):
             ai_client=adapters["ai"],
             userstore=adapters["userstore"],
             vector_store=adapters["vector"],
-            vector_backend=os.getenv("VECTOR_BACKEND", "bedrock_kb"),
-            bedrock_kb_id=os.getenv("VECTOR_BEDROCK_KB_ID", ""),
             storage=adapters["storage"],
             session_id=req.session_id,
             doc_id=req.doc_id,
@@ -210,7 +208,6 @@ def quiz(req: QuizRequest, x_user_id: Optional[str] = Header(None)):
             ai_client=adapters["ai"],
             userstore=adapters["userstore"],
             vector_store=adapters["vector"],
-            vector_backend=os.getenv("VECTOR_BACKEND", "bedrock_kb"),
             storage=adapters["storage"],
         )
         if "error" in result:
@@ -237,7 +234,6 @@ def flashcards(req: FlashcardRequest, x_user_id: Optional[str] = Header(None)):
             ai_client=adapters["ai"],
             userstore=adapters["userstore"],
             vector_store=adapters["vector"],
-            vector_backend=os.getenv("VECTOR_BACKEND", "bedrock_kb"),
             storage=adapters["storage"],
         )
         if "error" in result:
@@ -262,8 +258,6 @@ def summary(req: SummaryRequest, x_user_id: Optional[str] = Header(None)):
             doc_ids=req.doc_ids,
             ai_client=adapters["ai"],
             userstore=adapters["userstore"],
-            vector_store=adapters["vector"],
-            vector_backend=os.getenv("VECTOR_BACKEND", "bedrock_kb"),
             storage=adapters["storage"],
         )
         if "error" in result:

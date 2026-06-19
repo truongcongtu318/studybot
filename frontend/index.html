@@ -118,6 +118,12 @@ body{font-family:'Geist',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;fo
 @media(max-width:1100px){.app{grid-template-columns:260px 1fr 320px}}
 @media(max-width:900px){.app{grid-template-columns:1fr}.sidebar-l,.sidebar-r{display:none}.sidebar-l.show,.sidebar-r.show{display:flex;position:absolute;top:56px;bottom:0;z-index:100;width:280px}.sidebar-r.show{right:0}.mob-nav{display:flex}.center{grid-column:1}}
 .mob-nav{display:none;background:var(--panel);box-shadow:var(--shadow-border);padding:0 12px;height:44px;align-items:center;gap:4px;flex-shrink:0}.mob-nav button{flex:1;background:none;border:none;color:#a3a3a3;font-family:inherit;font-size:12px;font-weight:500;padding:10px 4px;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}.mob-nav button.act{color:#171717;border-bottom-color:#171717}
+
+/* Upload loading state */
+.upload-zone.uploading{cursor:not-allowed;pointer-events:none;border-color:var(--brand);background:rgba(0,0,0,0.02)}
+.upload-spinner{width:24px;height:24px;border:2.5px solid rgba(0,0,0,0.08);border-radius:50%;border-top-color:#171717;animation:spin .7s linear infinite;margin:0 auto 6px}
+.btn-spinner{display:inline-block;width:12px;height:12px;border:1.5px solid rgba(255,255,255,0.3);border-radius:50%;border-top-color:#fff;animation:spin .7s linear infinite;margin-right:8px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -151,9 +157,16 @@ body{font-family:'Geist',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;fo
     <div class="doc-panel">
       <div class="section-hdr">📁 Documents</div>
       <div class="upload-zone" id="upload-zone">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        <div class="upload-t">Drop files or click to upload</div>
-        <div class="upload-st">PDF, TXT, MD • Max 10MB</div>
+        <div class="upload-default-state" id="upload-default-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <div class="upload-t">Drop files or click to upload</div>
+          <div class="upload-st">PDF, TXT, MD • Max 10MB</div>
+        </div>
+        <div class="upload-loading-state" id="upload-loading-state" style="display: none;">
+          <div class="upload-spinner"></div>
+          <div class="upload-t" id="upload-filename">Uploading file...</div>
+          <div class="upload-st">Extracting text & indexing vectors</div>
+        </div>
         <input type="file" id="file-input" hidden accept=".pdf,.txt,.md">
       </div>
       <div class="doc-list" id="doc-list">
@@ -216,7 +229,7 @@ body{font-family:'Geist',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;fo
       <div id="quiz-setup">
         <label class="field-lbl">Questions</label>
         <select class="sel-field" id="quiz-count"><option value="5">5 Questions</option><option value="10">10 Questions</option><option value="15">15 Questions</option></select>
-        <button class="brand-btn" onclick="generateQuiz()">✨ Generate Quiz</button>
+        <button class="brand-btn" id="btn-gen-quiz" onclick="generateQuiz()">✨ Generate Quiz</button>
       </div>
       <div id="quiz-content" style="display:none"></div>
       <div id="quiz-score" class="quiz-score" style="display:none"></div>
@@ -227,7 +240,7 @@ body{font-family:'Geist',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;fo
       <div id="fc-setup">
         <label class="field-lbl">Cards</label>
         <select class="sel-field" id="fc-count"><option value="5">5 Cards</option><option value="10" selected>10 Cards</option><option value="15">15 Cards</option></select>
-        <button class="brand-btn" onclick="generateFlashcards()">✨ Generate Flashcards</button>
+        <button class="brand-btn" id="btn-gen-fc" onclick="generateFlashcards()">✨ Generate Flashcards</button>
       </div>
       <div id="fc-content" style="display:none;flex:1;flex-direction:column">
         <div class="fc-wrap" id="fc-box" onclick="flipCard()">
@@ -246,7 +259,7 @@ body{font-family:'Geist',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;fo
     </div>
 
     <div class="tab-panel" id="panel-summary">
-      <div id="sum-setup"><button class="brand-btn" onclick="generateSummary()">✨ Generate Summary</button></div>
+      <div id="sum-setup"><button class="brand-btn" id="btn-gen-sum" onclick="generateSummary()">✨ Generate Summary</button></div>
       <div id="sum-content" style="display:none"><div class="summary-box" id="sum-text"></div><h4 style="font-size:13px;margin-bottom:10px;color:#a3a3a3">🧪 Testable Concepts</h4><div id="sum-concepts"></div></div>
       <div class="empty-st" id="sum-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><p>Generate a concise summary with testable concepts</p></div>
     </div>
@@ -356,6 +369,17 @@ function setupUpload(){
 }
 
 async function uploadFile(file){
+  const zone = document.getElementById('upload-zone');
+  const defState = document.getElementById('upload-default-state');
+  const loadState = document.getElementById('upload-loading-state');
+  const fnLabel = document.getElementById('upload-filename');
+
+  // Show loading state
+  zone.classList.add('uploading');
+  if(defState) defState.style.display = 'none';
+  if(loadState) loadState.style.display = 'block';
+  if(fnLabel) fnLabel.textContent = `Uploading ${file.name}...`;
+
   const fd = new FormData(); fd.append('file', file);
   showToast(`Uploading ${file.name}...`);
   try{
@@ -366,6 +390,12 @@ async function uploadFile(file){
       await loadDocuments(); await loadDashboard();
     }else{ const e = await r.json().catch(()=>({})); showToast(e.detail||'Upload failed','err'); }
   }catch(e){ showToast('Network error','err'); }
+  finally {
+    // Restore default state
+    zone.classList.remove('uploading');
+    if(defState) defState.style.display = 'block';
+    if(loadState) loadState.style.display = 'none';
+  }
 }
 
 // ---- Utility ----
@@ -414,6 +444,38 @@ function renderDocList(){
   list.innerHTML = html;
 }
 
+function resetTools(){
+  // Reset Quiz Tab
+  quizData = []; quizAnswers = {}; quizScore = {correct:0, wrong:0};
+  const qSetup = document.getElementById('quiz-setup');
+  const qContent = document.getElementById('quiz-content');
+  const qScore = document.getElementById('quiz-score');
+  const qEmpty = document.getElementById('quiz-empty');
+  if (qSetup) qSetup.style.display = 'block';
+  if (qContent) { qContent.style.display = 'none'; qContent.innerHTML = ''; }
+  if (qScore) { qScore.style.display = 'none'; qScore.innerHTML = ''; }
+  if (qEmpty) qEmpty.style.display = 'flex';
+
+  // Reset Flashcards Tab
+  flashcardData = []; fcIdx = 0; fcFlipped = false;
+  const fcSetup = document.getElementById('fc-setup');
+  const fcContent = document.getElementById('fc-content');
+  const fcEmpty = document.getElementById('fc-empty');
+  const fcBox = document.getElementById('fc-box');
+  if (fcSetup) fcSetup.style.display = 'block';
+  if (fcContent) fcContent.style.display = 'none';
+  if (fcEmpty) fcEmpty.style.display = 'flex';
+  if (fcBox) fcBox.classList.remove('flipped');
+
+  // Reset Summary Tab
+  const sumSetup = document.getElementById('sum-setup');
+  const sumContent = document.getElementById('sum-content');
+  const sumEmpty = document.getElementById('sum-empty');
+  if (sumSetup) sumSetup.style.display = 'block';
+  if (sumContent) { sumContent.style.display = 'none'; document.getElementById('sum-text').innerHTML = ''; document.getElementById('sum-concepts').innerHTML = ''; }
+  if (sumEmpty) sumEmpty.style.display = 'flex';
+}
+
 function toggleDocCheckbox(docId){
   const idx = selectedDocIds.indexOf(docId);
   if(idx > -1){
@@ -424,6 +486,7 @@ function toggleDocCheckbox(docId){
   localStorage.setItem('sb_selDocIds', JSON.stringify(selectedDocIds));
   updateDocTitle();
   renderDocList();
+  resetTools();
 }
 
 function toggleAllDocs(){
@@ -435,6 +498,7 @@ function toggleAllDocs(){
   localStorage.setItem('sb_selDocIds', JSON.stringify(selectedDocIds));
   updateDocTitle();
   renderDocList();
+  resetTools();
 }
 
 function updateDocTitle(){
@@ -469,8 +533,16 @@ async function removeDoc(docId){
     if(r.ok){
       const d = await r.json();
       showToast(`Deleted: ${d.filename||docId}`,'ok');
+
+      // Remove from selected list if it was selected
+      const idx = selectedDocIds.indexOf(docId);
+      if(idx > -1){
+        selectedDocIds.splice(idx, 1);
+        localStorage.setItem('sb_selDocIds', JSON.stringify(selectedDocIds));
+      }
+
       await loadDocuments(); await loadDashboard();
-      if(selectedDoc.id===docId) selectDoc('all');
+      resetTools();
     }else{ const e = await r.json().catch(()=>({})); showToast(e.detail||'Delete failed','err'); }
   }catch(e){ showToast('Network error','err'); }
 }
@@ -671,25 +743,32 @@ function appendMessage(role, text, citations=[]){
     list.style.flexDirection = 'column';
     list.style.gap = '4px';
 
-    citations.forEach((c, i)=>{
-      const num = i + 1;
+    const uniqueFiles = [];
+    const seen = new Set();
+    citations.forEach(c => {
       const fn = c.filename || c.reference || 'Source Document';
-      const snippet = c.snippet || c.text || '';
-      
+      const cleanFn = fn.split(' (Part ')[0];
+      if (!seen.has(cleanFn)) {
+        seen.add(cleanFn);
+        uniqueFiles.push(cleanFn);
+      }
+    });
+
+    uniqueFiles.forEach((cleanFn, i)=>{
+      const num = i + 1;
       const li = document.createElement('li');
       li.style.color = '#4d4d4d';
       li.style.display = 'flex';
       li.style.flexDirection = 'column';
       li.style.gap = '2px';
-      
-      // Inline element containing reference
+
       const refLine = document.createElement('div');
       refLine.style.display = 'flex';
       refLine.style.alignItems = 'center';
       refLine.style.gap = '6px';
       refLine.innerHTML = `<span style="font-weight: 600; color: #171717; min-width: 24px;">[${num}]</span>
-                           <span style="font-weight: 500; color: #0072f5; cursor: pointer; text-decoration: underline;" onclick="alert('Snippet preview:\\n\\n${snippet.replace(/'/g,"\\'")}')">📎 ${fn}</span>`;
-      
+                           <span style="font-weight: 500; color: #4d4d4d;">📎 ${cleanFn}</span>`;
+
       li.appendChild(refLine);
       list.appendChild(li);
     });
@@ -846,6 +925,11 @@ function setupTabs(){
 let quizData=[], quizAnswers={}, quizScore={correct:0,wrong:0};
 
 async function generateQuiz(){
+  const btn = document.getElementById('btn-gen-quiz');
+  const origHTML = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<span class="btn-spinner"></span>Generating Quiz...`;
+
   const n = parseInt(document.getElementById('quiz-count').value)||5;
   const body = {num_questions:n, ..._buildDocPayload()};
   showToast('Generating quiz...');
@@ -860,6 +944,7 @@ async function generateQuiz(){
       updateQuizScore();
     }else{ const e = await r.json().catch(()=>({})); showToast(e.detail||'Quiz generation failed','err'); }
   }catch(e){ showToast('Network error','err'); }
+  finally { btn.disabled = false; btn.innerHTML = origHTML; }
 }
 
 function renderQuiz(){
@@ -894,6 +979,11 @@ function updateQuizScore(){
 let flashcardData=[], fcIdx=0, fcFlipped=false;
 
 async function generateFlashcards(){
+  const btn = document.getElementById('btn-gen-fc');
+  const origHTML = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<span class="btn-spinner"></span>Generating Cards...`;
+
   const n = parseInt(document.getElementById('fc-count').value)||10;
   const body = {num_cards:n, ..._buildDocPayload()};
   showToast('Generating flashcards...');
@@ -908,6 +998,7 @@ async function generateFlashcards(){
       updateFlashcard();
     }else{ const e = await r.json().catch(()=>({})); showToast(e.detail||'Flashcard generation failed','err'); }
   }catch(e){ showToast('Network error','err'); }
+  finally { btn.disabled = false; btn.innerHTML = origHTML; }
 }
 
 function updateFlashcard(){
@@ -934,6 +1025,11 @@ function navCard(dir){
 
 // ---- Summary ----
 async function generateSummary(){
+  const btn = document.getElementById('btn-gen-sum');
+  const origHTML = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<span class="btn-spinner"></span>Generating Summary...`;
+
   const body = _buildDocPayload();
   showToast('Generating summary...');
   try{
@@ -948,6 +1044,7 @@ async function generateSummary(){
       document.getElementById('sum-concepts').innerHTML = concepts.map(c=>`<details class="concept"><summary>${c.concept||'Concept'}</summary><div class="concept-body"><div><strong>Why testable:</strong> ${c.why_testable||''}</div><div><strong>Key takeaway:</strong> ${c.key_takeaway||''}</div></div></details>`).join('');
     }else{ const e = await r.json().catch(()=>({})); showToast(e.detail||'Summary generation failed','err'); }
   }catch(e){ showToast('Network error','err'); }
+  finally { btn.disabled = false; btn.innerHTML = origHTML; }
 }
 
 // ---- Dashboard ----
