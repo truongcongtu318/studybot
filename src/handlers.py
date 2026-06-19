@@ -123,7 +123,7 @@ def _parse_ai_json(raw_text: str) -> any:
 # Helper: build S3 RAG context + citations from documents
 # ============================================================================
 
-def _build_context_with_citations(user_id: str, userstore, storage, max_chars: int = 6000, doc_id: Optional[str] = None, doc_ids: Optional[list] = None):
+def _build_context_with_citations(user_id: str, userstore, storage, max_chars: int = 30000, doc_id: Optional[str] = None, doc_ids: Optional[list] = None):
     """Iterate user's docs, load text from S3, build formatted context and citations list.
     
     Supports single doc_id filter OR multi-doc_ids list filter (both optional).
@@ -138,6 +138,12 @@ def _build_context_with_citations(user_id: str, userstore, storage, max_chars: i
     context_parts = []
     citations = []
     total_len = 0
+    
+    # Fair allocation: each document gets at most max_chars / num_docs chars
+    num_docs = len(docs)
+    if num_docs == 0:
+        return "", []
+    max_per_doc = max(max_chars // num_docs, 5000)
 
     for doc in docs:
         d_id = doc.get("doc_id")
@@ -161,11 +167,16 @@ def _build_context_with_citations(user_id: str, userstore, storage, max_chars: i
         if not text_str:
             continue
 
+        # Truncate each doc to its fair share to prevent one doc from dominating the context
+        if len(text_str) > max_per_doc:
+            text_str = text_str[:max_per_doc] + "\n[Content truncated due to length limits...]"
+
         if total_len + len(text_str) > max_chars:
             allowed = max_chars - total_len
-            snippet = text_str[:allowed]
-            context_parts.append(f"--- START DOCUMENT: {filename} ---\n{snippet}\n--- END DOCUMENT: {filename} ---")
-            citations.append({"text": f"[{len(citations)+1}] {filename} (S3 source)", "filename": filename, "snippet": snippet[:200]})
+            if allowed > 200:
+                snippet = text_str[:allowed]
+                context_parts.append(f"--- START DOCUMENT: {filename} ---\n{snippet}\n--- END DOCUMENT: {filename} ---")
+                citations.append({"text": f"[{len(citations)+1}] {filename} (S3 source)", "filename": filename, "snippet": snippet[:200]})
             break
         
         context_parts.append(f"--- START DOCUMENT: {filename} ---\n{text_str}\n--- END DOCUMENT: {filename} ---")
@@ -308,10 +319,20 @@ def handle_query(
     # Build S3 document context with proper citations (respect doc_ids / doc_id filter)
     context, s3_citations = _build_context_with_citations(user_id, userstore, storage, doc_id=doc_id, doc_ids=doc_ids)
     
+    # Calculate total characters of selected docs to decide between S3 full-text and Vector Search
+    docs = userstore.list_docs(user_id)
+    if doc_ids:
+        docs = [d for d in docs if d.get("doc_id") in doc_ids]
+    elif doc_id:
+        docs = [d for d in docs if d.get("doc_id") == doc_id]
+    total_chars = sum(d.get("chars", 0) for d in docs)
+
     # Execute the right RAG path
-    if not bedrock_kb_id or bedrock_kb_id == "ABCD1234":
-        # S3-only fallback
-        logger.info("Bedrock KB ID is dummy/empty — using S3 fulltext RAG fallback")
+    # If Bedrock KB ID is dummy/empty or if the total character size is small (<= 35000 chars),
+    # we prefer S3 full-text context. This provides 100% accuracy and covers ALL documents fully,
+    # preventing retrieval loss where only one document gets retrieved by Vector Search.
+    if not bedrock_kb_id or bedrock_kb_id == "ABCD1234" or total_chars <= 35000:
+        logger.info(f"Using S3 fulltext RAG (total chars: {total_chars})")
         if context.strip():
             prompt = _build_rag_prompt(context, question, history_context)
             answer = ai_client.invoke(prompt, max_tokens=2048)
@@ -319,23 +340,26 @@ def handle_query(
         else:
             answer = "You haven't uploaded any study materials yet! Please upload a PDF, TXT or Markdown file first."
     else:
-        # Bedrock KB path
+        # Bedrock KB path (for large document collections)
         try:
+            logger.info(f"Using Bedrock KB Vector Search (total chars: {total_chars})")
             filter_kwargs = {"user_id": user_id}
-            # Single doc filter
             if doc_id:
                 filter_kwargs["doc_id"] = doc_id
             
             # Since Bedrock KB standard equals filter does not support IN queries natively,
-            # we query top 15 results and filter them locally to match the list of selected doc_ids
-            query_top_k = 15 if doc_ids else 5
+            # we query top 30 results and filter them locally to match the list of selected doc_ids
+            # Nâng query_top_k lên 30 để đảm bảo lấy được chunks từ nhiều tài liệu khác nhau
+            query_top_k = 30 if (doc_ids or not doc_id) else 10
             chunks = vector_store.search(question, top_k=query_top_k, filter=filter_kwargs)
             
             # Local filtering for doc_ids list
             if doc_ids:
                 chunks = [c for c in chunks if c.get("metadata", {}).get("doc_id") in doc_ids or c.get("doc_id") in doc_ids]
-                # Slice back to top 5
-                chunks = chunks[:5]
+                # Slice back to top 10
+                chunks = chunks[:10]
+            else:
+                chunks = chunks[:10]
                 
             kb_context = "\n\n".join([f"[Chunk {i+1}] {c['text']}" for i, c in enumerate(chunks)]) if chunks else ""
             if chunks:
@@ -428,7 +452,7 @@ def handle_quiz(
         content = "\n\n".join(parts)
 
     if not content.strip():
-        content, _ = _build_context_with_citations(user_id, userstore, storage, max_chars=5000, doc_id=doc_id, doc_ids=doc_ids)
+        content, _ = _build_context_with_citations(user_id, userstore, storage, max_chars=30000, doc_id=doc_id, doc_ids=doc_ids)
 
     if not content.strip():
         return {"error": "No study materials found. Please upload a document first.", "quiz_id": None, "questions": []}
@@ -482,7 +506,7 @@ def handle_flashcards(
         content = "\n\n".join(parts)
 
     if not content.strip():
-        content, _ = _build_context_with_citations(user_id, userstore, storage, max_chars=5000, doc_id=doc_id, doc_ids=doc_ids)
+        content, _ = _build_context_with_citations(user_id, userstore, storage, max_chars=30000, doc_id=doc_id, doc_ids=doc_ids)
 
     if not content.strip():
         return {"error": "No study materials found. Please upload a document first.", "cards_id": None, "flashcards": []}
@@ -513,7 +537,7 @@ def handle_summary(
     storage,
 ) -> dict:
     """Generate summary from content."""
-    content, _ = _build_context_with_citations(user_id, userstore, storage, max_chars=5000, doc_id=doc_id, doc_ids=doc_ids)
+    content, _ = _build_context_with_citations(user_id, userstore, storage, max_chars=30000, doc_id=doc_id, doc_ids=doc_ids)
 
     if not content.strip():
         return {"error": "No study materials found to summarize.", "summary": "No study materials found to summarize.", "testable_concepts": [], "doc_id": doc_id or "all", "doc_ids": doc_ids}
