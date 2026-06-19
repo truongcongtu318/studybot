@@ -327,7 +327,7 @@ resource "aws_apigatewayv2_stage" "prod" {
 }
 
 resource "aws_cloudwatch_log_group" "apigw" {
-  name              = "/aws/apigateway/${local.prefix}"
+  name              = "/aws/apigateway/${local.prefix}-${local.suffix}"
   retention_in_days = 7
 }
 
@@ -336,7 +336,7 @@ resource "aws_cloudwatch_log_group" "apigw" {
 # ============================================================================
 
 resource "aws_cloudfront_origin_access_control" "frontend" {
-  name                              = "${local.prefix}-oac"
+  name                              = "${local.prefix}-${local.suffix}-oac"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
