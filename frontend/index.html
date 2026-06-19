@@ -268,8 +268,9 @@ body{font-family:'Geist',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;fo
 <div class="toast-c" id="toast-container"></div>
 
 <script>
+localStorage.removeItem('sb_api'); // Force clear old cached API URL
 // ---- State ----
-let API_BASE = localStorage.getItem('sb_api') || (window.API_BASE||new URLSearchParams(location.search).get('api')||'https://iygigcxym8.execute-api.us-east-1.amazonaws.com').replace(/\/$/,'');
+let API_BASE = localStorage.getItem('sb_api') || (window.API_BASE||new URLSearchParams(location.search).get('api')||'http://localhost:8000').replace(/\/$/,'');
 let userId = localStorage.getItem('sb_uid') || 'test-user-001';
 let selectedDoc = { id: 'all', name: 'All Documents', info: 'Querying across all your materials' };
 let selectedDocIds = []; // Array of selected document IDs

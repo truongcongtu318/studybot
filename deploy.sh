@@ -48,7 +48,10 @@ python package_lambda.py || error "Lambda build failed!"
 # ── Step 3: Terraform init & apply ──
 info "Step 3: Deploying infrastructure with Terraform..."
 cd terraform
-terraform init -upgrade
+# Only run init if not already initialized to save time and bypass network errors
+if [ ! -d ".terraform" ]; then
+    terraform init
+fi
 terraform apply -auto-approve
 
 # ── Step 4: Capture outputs ──
